@@ -1,0 +1,64 @@
+server:
+  port: 8089
+  servlet:
+    context-path: /forexApi
+    session:
+      cookie:
+        path: /
+    encoding:
+      charset: UTF-8          
+  error:
+    whitelabel:
+      enabled: false
+  tomcat:
+    uri-encoding: UTF-8
+      
+logging:
+  config: classpath:log4j2.xml
+  
+spring:
+  config:
+    activate:
+      on-profile: default 
+    import: "optional:configserver:http://localhost:8089" # 추가한 설정
+  redis:
+    host: localhost
+    port: 6379
+  session:
+    timeout: 60000
+    store-type: redis
+    redis:
+      flush-mode: on-save
+      namespace: spring:session    
+  devtools: 
+    livereload:
+      enabled: true    
+  datasource:
+    driverClassName: net.sf.log4jdbc.sql.jdbcapi.DriverSpy
+    url: jdbc:log4jdbc:postgresql://forex.c2i01xjfrd5g.ap-northeast-2.rds.amazonaws.com:5432/core
+    password: vhfprtm
+    username: readkaicore
+    hikari:
+      poolName: HikariCP
+      connectionTimeout: 30000
+      maximumPoolSize: 10
+      maxLifetime: 1800000
+      readOnly: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8099/auth/oauth/check_token
+  messages:
+    encoding: UTF-8
+    
+gateway:
+  url: http://localhost:9090/
+#  url: http://10.100.50.127:9090/
+      
+mybatis:
+  mapper-locations: classpath:sql/mapper/**/**.xml
+  
+  
+
+    

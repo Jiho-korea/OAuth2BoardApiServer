@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.mapper.report.ReportMapper"> 
+
+	<sql id="bufferCondition">
+		<if test="workcenter != null and workcenter != ''">
+			AND workcenter = #{workcenter}
+		</if>	        
+		<if test="target_date != null and target_date != ''">
+			AND CAST(create_date AS DATE) = CAST(#{target_date} AS DATE)
+		</if>	        
+	</sql>
+
+	<select id="buffer" resultType="java.util.HashMap">
+		WITH list AS (
+			SELECT 
+				company
+				,workcenter
+				,(SELECT name FROM master.workcenter WHERE company = t1.company AND workcenter = t1.workcenter) AS workcenter_name
+				,create_date::date
+			FROM 
+				aps.dispatch_control_buffer AS t1 
+			WHERE
+				company = #{company}
+		    <include refid="bufferCondition" />
+			GROUP BY company,workcenter,create_date::date
+		),
+		list1 AS (
+			SELECT *,(SELECT date FROM master.factory_calendar WHERE company = list.company AND work_flag = 'X' AND DATE >= list.create_date ORDER BY date LIMIT 1) AS day0  FROM list
+		),
+		list2 AS (
+			SELECT *,(SELECT date FROM master.factory_calendar WHERE company = list1.company AND work_flag = 'X' AND date >= day0 + INTERVAL '1 day' ORDER BY date ASC LIMIT 1) AS day1 FROM list1
+		),
+		list3 AS (
+			SELECT *,(SELECT date FROM master.factory_calendar WHERE company = list2.company AND work_flag = 'X' AND date >= day1 + INTERVAL '1 day' ORDER BY date ASC LIMIT 1) AS day2 FROM list2
+		),
+		list4 AS (
+			SELECT *,(SELECT date FROM master.factory_calendar WHERE company = list3.company AND work_flag = 'X' AND date >= day2  + INTERVAL '1 day' ORDER BY date ASC LIMIT 1) AS day3 FROM list3
+		)
+		SELECT 
+			*
+			,(SELECT COUNT(0) FROM aps.dispatch_control_buffer AS t2 WHERE t2.workcenter = t1.workcenter AND CAST(t2.wc_start_date AS DATE) = CAST(day0 AS DATE) AND CAST(t2.create_date AS DATE) = CAST(t1.create_date AS DATE)) AS day0_plan
+			,(SELECT COUNT(0) FROM aps.dispatch_control_buffer AS t2 WHERE t2.workcenter = t1.workcenter AND CAST(t2.wc_start_date AS DATE) = CAST(day0 AS DATE) AND t2.status NOT IN ('P','W') AND CAST(t2.create_date AS DATE) = CAST(t1.create_date AS DATE)) AS day0_delay
+			,(SELECT COUNT(0) FROM aps.dispatch_control_buffer AS t2 WHERE t2.workcenter = t1.workcenter AND CAST(t2.wc_start_date AS DATE) = CAST(day1 AS DATE) AND CAST(t2.create_date AS DATE) = CAST(t1.create_date AS DATE)) AS day1_plan
+			,(SELECT COUNT(0) FROM aps.dispatch_control_buffer AS t2 WHERE t2.workcenter = t1.workcenter AND CAST(t2.wc_start_date AS DATE) = CAST(day1 AS DATE) AND t2.status NOT IN ('P','W') AND CAST(t2.create_date AS DATE) = CAST(t1.create_date AS DATE)) AS day1_delay
+			,(SELECT COUNT(0) FROM aps.dispatch_control_buffer AS t2 WHERE t2.workcenter = t1.workcenter AND CAST(t2.wc_start_date AS DATE) = CAST(day2 AS DATE) AND CAST(t2.create_date AS DATE) = CAST(t1.create_date AS DATE)) AS day2_plan
+			,(SELECT COUNT(0) FROM aps.dispatch_control_buffer AS t2 WHERE t2.workcenter = t1.workcenter AND CAST(t2.wc_start_date AS DATE) = CAST(day2 AS DATE) AND t2.status NOT IN ('P','W') AND CAST(t2.create_date AS DATE) = CAST(t1.create_date AS DATE)) AS day2_delay
+			,(SELECT COUNT(0) FROM aps.dispatch_control_buffer AS t2 WHERE t2.workcenter = t1.workcenter AND CAST(t2.wc_start_date AS DATE) = CAST(day3 AS DATE) AND CAST(t2.create_date AS DATE) = CAST(t1.create_date AS DATE)) AS day3_plan
+			,(SELECT COUNT(0) FROM aps.dispatch_control_buffer AS t2 WHERE t2.workcenter = t1.workcenter AND CAST(t2.wc_start_date AS DATE) = CAST(day3 AS DATE) AND t2.status NOT IN ('P','W') AND CAST(t2.create_date AS DATE) = CAST(t1.create_date AS DATE)) AS day3_delay	
+		FROM list4 AS t1
+
+	</select>
+
+	<select id="bufferList" resultType="java.util.HashMap">
+		SELECT 
+			A.material,
+			A.plant,
+			A.order_number,
+			A.planned_order_flag,
+			A.op,
+			A.gop,
+			A.qty,
+			A.uom,
+			A.workcenter,
+			'' AS now_workcenter,
+			'' AS now_workcenter_name,
+			A.equipment_seq,
+			A.equipment_seq AS equipment_name,
+			A.emergency,
+			A.fix_date,
+			A.fix_time,
+			(SELECT COALESCE(worktime_factor, 1) FROM master.workcenter WHERE company = A.company AND workcenter = A.workcenter) AS worktime_factor,
+			CAST(A.dbr_start_date AS DATE) AS aps_start_date,
+			CAST(A.dbr_end_date AS DATE) AS aps_end_date,
+			CAST(A.rq_start_date AS DATE) AS bwd_start_date,
+			CAST(A.rq_end_date AS DATE) AS bwd_end_date,
+			total_time,
+			status,
+			A.lead_time,
+			setup,
+			run,
+			remove,
+			A.spindle,
+			CAST(A.wc_start_date AS DATE) AS wc_start_date,
+			CAST(A.wc_end_date AS DATE) AS wc_end_date,
+			ccr_flag,
+			sort_seq,
+			operation_seq,
+			occupy_time,
+			(SELECT create_date FROM product.shop_order_status WHERE company = A.company AND order_number = A.order_number AND current_gop = A.gop) AS delay_date,
+			(CASE 
+				WHEN 
+					(status = 'P' OR status = 'W')
+				THEN
+					(CAST(NOW() AS DATE)-(SELECT CAST(create_date AS DATE) FROM product.shop_order_status WHERE company = A.company AND order_number = A.order_number AND current_gop = A.gop))					
+					- (SELECT COUNT(0) FROM master.factory_calendar WHERE COMPANY = a.company AND date <![CDATA[>=]]> (SELECT create_date FROM product.shop_order_status WHERE company = A.company AND order_number = A.order_number AND current_gop = A.gop) AND date <![CDATA[<=]]> NOW() AND work_flag is null)
+				ELSE
+					NULL
+			END) delay_day
+		FROM 
+			aps.dispatch_control_buffer A
+		WHERE
+			company			= #{company}
+		AND workcenter		= #{workcenter}
+		AND CAST(wc_start_date AS DATE)	= CAST(#{date} AS DATE)
+		AND CAST(create_date AS DATE) = CAST(#{target_date} AS DATE)
+		ORDER BY A.wc_start_date, A.operation_seq, A.sort_seq, A.material, CAST(A.op AS INT)
+	</select>
+</mapper>

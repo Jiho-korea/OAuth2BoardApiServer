@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.mapper.dispatchControlResult.DispatchControlResultMapper"> 
+
+	<sql id="dispatchControlResultReadCondition">
+		<if test="material != null and material != ''">
+			AND material = #{material}
+		</if>	 
+		<if test="plant != null and plant != ''">
+			AND plant = #{plant}
+		</if>	 
+		<if test="order_number != null and order_number != ''">
+			AND order_number LIKE CONCAT('%',#{order_number},'%')	
+		</if>           
+		<if test="gop != null and gop != ''">
+			AND gop = #{gop}
+		</if>	        
+		<if test="workcenter != null and workcenter != ''">
+			AND workcenter = #{workcenter}
+		</if>
+		<if test="ccr_flag != null and ccr_flag != ''">
+			AND ccr_flag = #{ccr_flag}
+		</if>	
+		<if test="emergency != null and emergency != ''">
+			AND emergency = #{emergency}
+		</if>		
+		<if test="workstop != null and workstop != ''">
+			AND workstop = #{workstop}
+		</if>	
+		<if test="result_date_from != null and result_date_from != ''">
+			AND CAST(result_date AS date) <![CDATA[>=]]> CAST(#{result_date_from} AS DATE)
+		</if>
+		<if test="result_date_to != null and result_date_to != ''">
+			AND CAST(result_date AS date) <![CDATA[<=]]> CAST(#{result_date_to} AS DATE)
+		</if>
+		<if test="seq != null and seq != ''">
+			AND seq = CAST(#{seq} AS INT)
+		</if>			
+	</sql>
+
+	<select id="dispatchControlResultRead" resultType="java.util.HashMap">
+		SELECT 
+			seq
+			,material
+			,plant
+			,order_number
+			,planned_order_flag
+			,op
+			,gop
+			,qty
+			,uom
+			,workcenter
+			,(SELECT "name" FROM master.workcenter WHERE company = d.company AND workcenter = d.workcenter) AS workcenter_name
+			,equipment_seq
+			,(SELECT equipment_code FROM master.equipment WHERE seq = d.equipment_seq) AS equipment_code	
+			,(SELECT equipment_name FROM master.equipment WHERE seq = d.equipment_seq) AS equipment_name	
+			,CAST(dbr_start_date AS DATE) AS dbr_start_date
+			,CAST(dbr_end_date AS DATE) AS dbr_end_date	
+			,CAST(rq_start_date AS DATE) AS rq_start_date	
+			,CAST(rq_end_date AS DATE) AS rq_end_date
+			,status
+			,CAST(wc_start_date AS DATE) AS wc_start_date
+			,CASE WHEN wc_start_time IS NULL THEN NULL ELSE CONCAT(SUBSTRING(wc_start_time,1,2),':',substring(wc_start_time,3,2)) END wc_start_time	
+			,CAST(wc_end_date AS DATE) AS wc_end_date
+			,CASE WHEN wc_end_time IS NULL THEN NULL ELSE CONCAT(SUBSTRING(wc_end_time,1,2),':',substring(wc_end_time,3,2)) END wc_end_time	
+			,ccr_flag
+			,CAST(fwd_start_date AS DATE) AS fwd_start_date
+			,CAST(fwd_end_date AS DATE) AS fwd_end_date
+			,lead_time
+			,setup
+			,run
+			,remove
+			,total_time
+			,spindle
+			,worktime_factor
+			,sort_seq
+			,occupy_time
+			,CASE WHEN order_carry_in_date != '' THEN CAST(order_carry_in_date AS DATE) ELSE NULL END order_carry_in_date
+			,CASE WHEN order_carry_in_date != '' THEN (CAST(NOW() AS DATE) - CAST(order_carry_in_date AS DATE)) - (SELECT COUNT(*) FROM master.factory_calendar WHERE COMPANY = d.company AND date <![CDATA[>=]]> CAST(order_carry_in_date AS DATE) AND date <![CDATA[<=]]> CAST(NOW() AS DATE) AND work_flag is null) ELSE NULL END order_carry_in_date_day	
+			,tool
+			,grouping_period
+			,multi_work_count
+			,completion_qty
+			,progress_qty
+			,progress_time
+			,grouping_seq
+			,emergency
+			,CAST(fix_date AS DATE) AS fix_date
+			,CASE WHEN fix_time IS NULL THEN NULL ELSE CONCAT(SUBSTRING(fix_time,1,2),':',substring(fix_time,3,2)) END fix_time
+			,remark
+			,result_date			
+			,(result_date + 1) AS result_date_add			
+			,result_status
+			,result_time
+			,create_date
+			,CAST(NOW() AS DATE) - CAST(wc_start_date AS DATE) AS difference_count
+			,(SELECT change_date FROM product.shop_order_status WHERE company = d.company AND order_number = d.order_number AND current_gop = d.gop)::date AS delay_date
+			,CASE 
+				WHEN
+					(status = 'P' OR status = 'W')
+				THEN
+					(now()::date - (SELECT change_date FROM product.shop_order_status WHERE company = d.company AND order_number = d.order_number AND current_gop = d.gop)::date) 
+					- (SELECT COUNT(0) FROM master.factory_calendar WHERE company = d.company AND "date" <![CDATA[>=]]> (SELECT change_date FROM product.shop_order_status WHERE company = d.company AND order_number = d.order_number AND current_gop = d.gop) AND "date" <![CDATA[<=]]> now()::date AND work_flag IS NULL)
+				ELSE 
+					NULL
+			END delay_day
+		FROM 
+			aps.dispatch_control_result AS d
+		WHERE
+			company = #{company}
+		<include refid="dispatchControlResultReadCondition" />
+		<if test="sort != null and sortType != null">	
+			<if test="sort == 'first'">	
+				ORDER BY wc_start_date, operation_seq, sort_seq, material, op ${sortType}
+			</if>      
+			<if test="sort != 'first'">	
+				ORDER BY ${sort} ${sortType}
+			</if>                 
+		</if>
+		<if test="paging != null and pageSize != null and page != null">	
+			LIMIT ${pageSize} OFFSET (CAST(${page} AS int)-1) * ${pageSize}
+		</if>
+		<if test="limit != null">	
+			LIMIT ${limit}
+		</if>
+	</select>
+	
+	<select id="dispatchControlResultCount" resultType="int">
+		SELECT 
+			COUNT(0)
+		FROM 
+			aps.dispatch_control_result AS d
+		WHERE
+			company = #{company}
+		<include refid="dispatchControlResultReadCondition" />
+	</select>	
+
+	<update id="dispatchControlResultUpdate">
+		UPDATE
+			aps.dispatch_control_result
+		SET
+			remark = #{remark}
+		WHERE
+			company = #{company}
+		AND seq = CAST(#{seq} AS INT)
+	</update>	
+
+</mapper>

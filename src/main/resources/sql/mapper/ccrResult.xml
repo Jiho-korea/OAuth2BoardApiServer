@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.mapper.report.ReportMapper"> 
+	<select id="dailyGraph" resultType="java.util.HashMap">
+		SELECT 
+			t1.date 
+			,CAST(ROUND(t1.plan_time/60,0) AS NUMERIC) AS plan_time
+			,t1.plan_qty
+			,CAST(ROUND(t2.quality_time/60,0) AS NUMERIC) AS quality_time
+			,t2.quality_qty
+			,CAST(ROUND(t3.total_time/60,0) AS NUMERIC) AS total_time
+			,t3.total_qty
+		  FROM 
+			(
+				SELECT A.date, SUM(COALESCE(B.result_time,0)) AS plan_time, SUM(COALESCE(B.qty,0)) AS plan_qty
+				  FROM master.factory_calendar A 
+				  LEFT OUTER JOIN aps.dispatch_control_result B 
+					ON A.company = B.company 
+				   AND A.date = B.result_date 
+				   AND B.result_date = CAST(B.wc_end_date AS DATE)
+				   AND B.occupy_time != 0
+				   AND B.workcenter = #{workcenter}
+				 WHERE A.company = #{company}
+				   AND A.date <![CDATA[>=]]> CAST(#{date_from} AS DATE)
+				   AND A.date <![CDATA[<=]]> CAST(#{date_to} AS DATE)
+				 GROUP BY A.date
+			) AS t1,
+			(
+				SELECT A.date, SUM(COALESCE(B.result_time,0)) AS quality_time, SUM(COALESCE(B.qty,0)) AS quality_qty
+				  FROM master.factory_calendar A 
+				  LEFT OUTER JOIN aps.dispatch_control_result B 
+					ON A.company = B.company 
+				   AND A.date = B.result_date 
+				   AND (CAST(B.wc_end_date AS DATE) = B.result_date OR CAST(B.wc_end_date AS DATE) = B.result_date + INTERVAL '1 day')
+				   AND B.workcenter = #{workcenter}
+				   AND B.result_status = 'E'
+				   AND B.occupy_time != 0
+				 WHERE A.company = #{company}
+				   AND A.date <![CDATA[>=]]> CAST(#{date_from} AS DATE)
+				   AND A.date <![CDATA[<=]]> CAST(#{date_to} AS DATE)
+				 GROUP BY A.date
+			) AS t2,
+			(
+				SELECT A.date, SUM(COALESCE(B.result_time,0)) AS total_time, SUM(COALESCE(B.qty,0)) AS total_qty
+				  FROM master.factory_calendar A 
+				  LEFT OUTER JOIN aps.dispatch_control_result B 
+					ON A.company = B.company 
+				   AND A.date = B.result_date 
+				   AND B.workcenter = #{workcenter}
+				   AND B.result_status = 'E'
+				 WHERE A.company = #{company}
+				   AND A.date <![CDATA[>=]]> CAST(#{date_from} AS DATE)
+				   AND A.date <![CDATA[<=]]> CAST(#{date_to} AS DATE)
+				 GROUP BY A.date
+			) AS t3
+		WHERE t1.date = t2.date AND t1.date = t3.date
+	</select>
+
+	<select id="totalGraph" resultType="java.util.HashMap">
+		WITH list AS (
+			SELECT t1.date, t1.plan_time, t1.plan_qty, t2.quality_time, t2.quality_qty, t3.total_time, t3.total_qty
+			  FROM 
+			(
+				SELECT A.date, SUM(COALESCE(B.result_time,0)) AS plan_time, SUM(COALESCE(B.qty,0)) AS plan_qty
+				  FROM master.factory_calendar A 
+				  LEFT OUTER JOIN aps.dispatch_control_result B 
+					ON A.company = B.company 
+				   AND A.date = B.result_date 
+				   AND B.result_date = CAST(B.wc_end_date AS DATE)
+				   AND B.occupy_time != 0
+				   AND B.workcenter = #{workcenter}
+				 WHERE A.company = #{company}
+				   AND A.date <![CDATA[>=]]> CAST(#{date_from} AS DATE)
+				   AND A.date <![CDATA[<=]]> CAST(#{date_to} AS DATE)
+				 GROUP BY A.date
+			) AS t1,
+			(
+				SELECT A.date, SUM(COALESCE(B.result_time,0)) AS quality_time, SUM(COALESCE(B.qty,0)) AS quality_qty
+				  FROM master.factory_calendar A 
+				  LEFT OUTER JOIN aps.dispatch_control_result B 
+					ON A.company = B.company 
+				   AND A.date = B.result_date 
+				   AND (CAST(B.wc_end_date AS DATE) = B.result_date OR CAST(B.wc_end_date AS DATE) = B.result_date + INTERVAL '1 DAY')
+				   AND B.workcenter = #{workcenter}
+				   AND B.result_status = 'E'
+				   AND B.occupy_time != 0
+				 WHERE A.company = #{company}
+				   AND A.date <![CDATA[>=]]> CAST(#{date_from} AS DATE)
+				   AND A.date <![CDATA[<=]]> CAST(#{date_to} AS DATE)
+				 GROUP BY A.date
+			) AS t2,
+			(
+				SELECT A.date, SUM(COALESCE(B.result_time,0)) AS total_time, SUM(COALESCE(B.qty,0)) AS total_qty
+				  FROM master.factory_calendar A 
+				  LEFT OUTER JOIN aps.dispatch_control_result B 
+					ON A.company = B.company 
+				   AND A.date = B.result_date 
+				   AND B.workcenter = #{workcenter}
+				   AND B.result_status = 'E'
+				 WHERE A.company = #{company}
+				   AND A.date <![CDATA[>=]]> CAST(#{date_from} AS DATE)
+				   AND A.date <![CDATA[<=]]> CAST(#{date_to} AS DATE)
+				 GROUP BY A.date
+			) AS t3
+			WHERE t1.date = t2.date AND t1.date = t3.date
+		) 
+		SELECT 
+			l1.date,
+			CAST(ROUND(SUM(l2.plan_time)/60,0) AS NUMERIC) as plan_time,
+			SUM(l2.plan_qty) as plan_qty,
+			CAST(ROUND(SUM(l2.quality_time)/60,0) AS NUMERIC) as quality_time,
+			SUM(l2.quality_qty) as quality_qty,
+			CAST(ROUND(SUM(l2.total_time)/60,0) AS NUMERIC) as total_time,
+			SUM(l2.total_qty) as total_qty
+		  FROM list AS l1, list AS l2
+		 WHERE l2.date <![CDATA[<=]]> l1.date
+		 GROUP BY l1.date,
+			l1.plan_time, 
+			l1.plan_qty, 
+			l1.quality_time, 
+			l1.quality_qty, 
+			l1.total_time, 
+			l1.total_qty
+		 ORDER BY l1.date
+	</select>
+
+	<select id="nonCCR" resultType="java.util.HashMap">
+		SELECT t1.date, t1.lead_time, t2.total_lead_time, t3.stagnation_lead_time
+		  FROM 
+			(
+				SELECT A.date, SUM(COALESCE(B.lead_time,0)) AS lead_time
+				  FROM master.factory_calendar A 
+				  LEFT OUTER JOIN aps.dispatch_control_result B 
+					ON A.company = B.company 
+				   AND A.date = B.result_date 
+				   AND B.result_date = CAST(B.wc_end_date AS DATE)
+				<if test="workcenter != null and workcenter != ''">
+					AND B.workcenter = #{workcenter}
+				</if>
+				   AND B.result_status = 'E'
+				 WHERE A.company = #{company}
+				   AND A.date <![CDATA[>=]]> CAST(#{date_from} AS DATE)
+				   AND A.date <![CDATA[<=]]> CAST(#{date_to} AS DATE)
+				 GROUP BY A.date
+			) AS t1,
+			(
+				SELECT A.date, SUM(COALESCE(B.lead_time,0)) AS total_lead_time
+				  FROM master.factory_calendar A 
+				  LEFT OUTER JOIN aps.dispatch_control_result B 
+					ON A.company = B.company 
+				   AND A.date = B.result_date 
+				   AND B.result_date = CAST(B.wc_end_date AS DATE)
+				<if test="workcenter != null and workcenter != ''">
+					AND B.workcenter = #{workcenter}
+				</if>
+				 WHERE A.company = #{company}
+				   AND A.date <![CDATA[>=]]> CAST(#{date_from} AS DATE)
+				   AND A.date <![CDATA[<=]]> CAST(#{date_to} AS DATE)
+				 GROUP BY A.date
+			) AS t2,
+			(
+				SELECT A.date, SUM(COALESCE(B.lead_time,0)) AS stagnation_lead_time
+				  FROM master.factory_calendar A 
+				  LEFT OUTER JOIN aps.dispatch_control_result B 
+					ON A.company = B.company 
+				   AND A.date = B.result_date 
+				   AND B.result_date = CAST(B.wc_end_date AS DATE)
+				<if test="workcenter != null and workcenter != ''">
+					AND B.workcenter = #{workcenter}
+				</if>
+				 WHERE A.company = #{company}
+				   AND A.date <![CDATA[>=]]> CAST(#{date_from} AS DATE)
+				   AND A.date <![CDATA[<=]]> CAST(#{date_to} AS DATE)
+				 GROUP BY A.date
+			) AS t3
+		WHERE t1.date= t2.date AND t1.date = t3.date
+	</select>
+
+	<select id="ccrOnHand" resultType="java.util.HashMap">
+		WITH list AS (
+			SELECT 
+				 company
+				,workcenter
+				,(SELECT name FROM master.workcenter WHERE company = t1.company AND workcenter = t1.workcenter) AS workcenter_name
+				,(SELECT (SELECT (total_time / 60) FROM core.master.factory_calendar_work_type WHERE company = s1.company AND work_type = s1.work_type) 
+					FROM core.master.factory_calendar_extend s1
+				   WHERE company = t1.company
+					 AND calendar_type = 'workcenter'
+					 AND calendar_key = t1.workcenter
+					 AND date <![CDATA[>=]]> CURRENT_DATE
+					 AND work_flag = 'X' 
+				   LIMIT 1) AS total_time
+			  FROM aps.dispatch_control AS t1
+			 WHERE company = #{company}
+			   <if test="workcenter != null and workcenter != ''">
+					AND workcenter = #{workcenter}
+			   </if>
+			   AND status IN ('P','W','S')
+			   AND ccr_flag = 'X'
+			 GROUP BY company, workcenter
+		)
+		SELECT 
+			*,
+			(SELECT COALESCE(ROUND((SUM((CASE WHEN t2.spindle = 1 THEN t2.total_time ELSE ROUND(t2.total_time / CEILING(t2.qty/t2.spindle) * (t2.qty/t2.spindle),3) END)) / list.total_time),0),0)
+			   FROM aps.dispatch_control AS t2 
+			  WHERE workcenter = list.workcenter
+				AND status = 'P') AS progress_onhand_day,
+			(SELECT COALESCE(ROUND((SUM((CASE WHEN t2.spindle = 1 THEN t2.total_time ELSE ROUND(t2.total_time / CEILING(t2.qty/t2.spindle) * (t2.qty/t2.spindle),3) END)) / list.total_time),0),0)
+			   FROM aps.dispatch_control AS t2 
+			  WHERE workcenter = list.workcenter
+				AND status = 'W') AS wait_onhand_day,
+			(SELECT COALESCE(ROUND((SUM((CASE WHEN t2.spindle = 1 THEN t2.total_time ELSE ROUND(t2.total_time / CEILING(t2.qty/t2.spindle) * (t2.qty/t2.spindle),3) END)) / list.total_time),0),0)
+			   FROM aps.dispatch_control AS t2 
+			  WHERE workcenter = list.workcenter
+				AND status = 'S') AS schedule_onhand_day
+		  FROM list
+	</select>
+
+</mapper>
