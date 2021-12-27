@@ -21,15 +21,6 @@ spring:
     activate:
       on-profile: default 
     import: "optional:configserver:http://localhost:8089" # 추가한 설정
-  redis:
-    host: localhost
-    port: 6379
-  session:
-    timeout: 60000
-    store-type: redis
-    redis:
-      flush-mode: on-save
-      namespace: spring:session    
   devtools: 
     livereload:
       enabled: true    
