@@ -53,8 +53,8 @@ dependencies {
     testImplementation 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'    	
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-	implementation 'org.springframework.session:spring-session-data-redis'	
+	// implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	// implementation 'org.springframework.session:spring-session-data-redis'	
 	implementation 'org.springframework.boot:spring-boot-starter-aop'	
 	implementation "org.aspectj:aspectjrt:1.9.6"
 	
